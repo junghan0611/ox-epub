@@ -1,78 +1,151 @@
-[[https://travis-ci.org/ofosos/ox-epub.svg?branch=master]]
-[[http://stable.melpa.org/packages/ox-epub-badge.svg]]
+#+title: ox-epub — Org-mode → clean EPUB 3.0 exporter
+#+author: Junghan Kim
+#+language: en
 
+Export Org-mode documents directly to *EPUB 3.0* from Emacs. A single
+=C-c C-e E e= turns the current buffer into a =.epub= that passes
+[[https://www.w3.org/publishing/epubcheck/][EPUBCheck]] with *0 errors / 0 warnings*.
 
-* ox-epub
+This is a maintained fork of [[https://github.com/ofosos/ox-epub][ofosos/ox-epub]]. The original (v0.1.0,
+unmaintained since 2018) only emitted the legacy *EPUB 2.0.1* format,
+which fails modern EPUBCheck on three structural counts (ARIA =role=
+forbidden under XHTML 1.1, SVG forced into foreign-resource fallback,
+compressed mimetype). This fork makes the exporter emit valid EPUB 3.0
+*natively* — no external post-processing step — and fixes headless
+(daemon / =--batch=) export.
 
-Generate =.epub= files directly from OrgMode. This will export EPUB
-version 2, which should give broad compatibility. It should also be
-relatiely easy to convert the resulting =.epub= to a =.mobi= (Kindle).
+* Features
 
-** Prerequisites
+- *Native EPUB 3.0* — =<!DOCTYPE html>= content documents, EPUB3
+  package, generated =nav.xhtml= (toc + landmarks) alongside =toc.ncx=.
+- *Math as SVG* — =#+OPTIONS: tex:dvisvgm= renders LaTeX to inline SVG.
+  No JavaScript, sharp at any zoom, identical across readers.
+- *Headless-safe* — exports from =emacs --daemon= / =--batch=. Cover
+  image dimensions are read from the PNG/JPEG header, so no graphic
+  frame is required (upstream called =image-size=, which aborts headless
+  with "Window system frame should be used").
+- *Faithful typography* — images, tables (caption + cross-reference),
+  footnotes (with backlinks), nested lists, quotes, code blocks,
+  emphasis, dashes, smart quotes, and named entities (=&alpha;= …) all
+  survive the round-trip and validate as XML.
+- *Korean / CJK* friendly.
+- Valid, escaped, unique =dc:identifier= (auto-generates a UUID when the
+  =#+UID= is missing or a malformed UUID).
 
-This depends on Emacs 24.3 and OrgMode 9, it won't work on OrgMode 8 or
-any version of Emacs before 24.3.
+* Requirements
 
-You will also need a working version of the =zip= utility.
+- Emacs 24.3+ and Org 9+.
+- The =zip= utility (for packaging).
+- For math export: a working =latex= + =dvisvgm= (TeX Live).
+- To validate: [[https://www.w3.org/publishing/epubcheck/][EPUBCheck]] (e.g. =nix run nixpkgs#epubcheck -- book.epub=).
 
-** Installation
+* Installation
 
-If you have MELPA stable activated, it is as simple as this:
+** Doom Emacs (local fork — recommended for hacking)
 
-=M-x package-install RET ox-epub RET=
+#+begin_src emacs-lisp
+;; packages.el
+(package! ox-epub :recipe (:local-repo "~/repos/gh/ox-epub" :files ("*.el")))
+#+end_src
 
-** Usage
+#+begin_src emacs-lisp
+;; config.el
+(use-package! ox-epub :after ox)
+#+end_src
 
-See the =sample= directory for a sample of what ox-epub can do.
+** straight.el
 
-Hit =C-c C-e E e= to publish the current buffer to an EPUB.
+#+begin_src emacs-lisp
+(straight-use-package
+ '(ox-epub :type git :host github :repo "junghan0611/ox-epub"))
+#+end_src
 
-There are some required export options that need to be set. These are
+** Manual
 
- - =UID= a unique id of the document, otherwise known as uri, may be a url
- - =DATE= the date of the document, for valid values see
-   [[https://www.w3.org/TR/NOTE-datetime]]
- - =AUTHOR= the document author or editor, the creator in the EPUB spec
- - =TITLE= the document title
+Clone the repo and =(add-to-list 'load-path "/path/to/ox-epub")=, then
+=(require 'ox-epub)=.
 
-Furthermore there are some properties which are optional:
+* Usage
 
- - =Subject= the subject matter of the book
- - =Description= a description of the book
- - =Publisher= the publisher of the book
- - =License= the rights associated with this book, the copyright
-   notice and further rights may be included in this option.
- - =EPUBCOVER= the cover image to use for the export
- - =EPUBSTYLE= the CSS file to use for the export, this is set by default
-   but can be set on a per document basis
+With the current Org buffer, hit =C-c C-e E e= (or =M-x
+org-epub-export-to-epub=) to produce =<file>.epub=.
 
-The only other option that is exported:
+** Document keywords
 
- - =LANGUAGE= the language of the book, this is to be interpreted
-   according to RFC3066 or it's succeeding documents
-   [[https://www.ietf.org/rfc/rfc3066.txt]], no other interpretations are
-   allowed according to the EPUB spec.
+Required:
 
-** Features
+| Keyword      | Meaning                                              |
+|--------------+------------------------------------------------------|
+| =#+TITLE=    | document title                                       |
+| =#+AUTHOR=   | author / creator                                     |
+| =#+LANGUAGE= | language tag (RFC 3066), e.g. =ko=, =en=             |
+| =#+DATE=     | publication date                                     |
+| =#+UID=      | unique id (URL / =urn:uuid:…=). Auto-UUID if missing |
 
-Currently =ox-epub= can do the following:
+Optional:
 
- - simple cover images
- - inclusion of png and jpg images
- - export of mathematical formulas
- - direct =.epub= generation
- - add stylesheets to your liking: Use the EPUBSTYLE property to add a
-   list of stylesheets and customize =html-head-include-default-style=
-   to toggle inclusion of the default stylesheet.
+| Keyword         | Meaning                                              |
+|-----------------+------------------------------------------------------|
+| =#+SUBJECT=     | subject matter                                       |
+| =#+DESCRIPTION= | description                                          |
+| =#+PUBLISHER=   | publisher                                            |
+| =#+LICENSE=     | rights / copyright                                   |
+| =#+EPUBCOVER=   | cover image (PNG recommended; 1:1.6, e.g. 1600x2560) |
+| =#+EPUBSTYLE=   | extra CSS file(s)                                    |
 
-** Caveats
+Heading levels map to the EPUB chapter structure; =#+OPTIONS: H:4=
+controls TOC depth, =toc:t num:t= the table of contents and numbering.
 
- - Mathematical formulas only export well if you use the =dvipng=
-   backend. =dvipng= should be included in TeXlive.
+** Math
 
-** Coffee
+- Inline: =\( ... \)=
+- Display: =\[ ... \]= (=aligned=, =\int=, =\nabla=, … supported)
+- Set =#+OPTIONS: tex:dvisvgm= to render formulas to SVG.
 
-I very much like coffee, so if you want to contribute to my coffee fund,
-you can now do that :)
+** Headless / batch export
 
-[[https://www.buymeacoffee.com/markZb][https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png]]
+#+begin_src sh
+emacs --batch -l ox-epub.el --eval \
+  "(with-current-buffer (find-file-noselect \"book.org\")
+     (org-epub-export-to-epub))"
+#+end_src
+
+* Sample & verification
+
+A full-feature fixture lives in =sample/= — it exercises images, SVG
+math (inline + display), tables, footnotes, TOC, Korean text, quotes,
+lists, code blocks, emphasis, dashes and entity conversion in one file.
+
+#+begin_src sh
+cd sample
+# (re)generate the cover/figure images — needs python + Pillow
+python gen-images.py
+# export via a running daemon …
+emacsclient -s <socket> --eval \
+  "(progn (load \"../ox-epub.el\")
+     (with-current-buffer (find-file-noselect \"sample.org\")
+       (org-epub-export-to-epub)))"
+# … then validate
+nix run nixpkgs#epubcheck -- sample.epub   # => 0 errors / 0 warnings
+#+end_src
+
+* What changed vs. upstream
+
+EPUB 2.0.1 → EPUB 3.0 lift, folded into the exporter itself:
+
+- Package =version="3.0"=, required =dcterms:modified=, valid/escaped
+  =dc:identifier= (UUID normalisation), empty =dc:*= elements dropped.
+- =image/svg= → =image/svg+xml= so SVG (math) is a core media type.
+- =<!DOCTYPE html>= + =xmlns:epub= content documents; named HTML
+  entities converted to literal characters (XML-safe).
+- Generated =nav.xhtml= (toc + landmarks); =<guide>= kept only for a
+  cover (EPUB2 reader backward compatibility), never empty.
+- Cover: =properties="svg"/"cover-image"=, non-empty =<title>=, real
+  aspect-ratio =viewBox=; dimensions read from file header (headless).
+- mimetype stored first with no trailing newline.
+- Obsolete presentational table attributes suppressed.
+
+* License
+
+GPLv3 (see =COPYING=). Original work © 2017–2018 Mark Meyer; fork
+maintained by Junghan Kim.

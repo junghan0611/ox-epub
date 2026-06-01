@@ -1,64 +1,132 @@
-#+TITLE: ox-epub Sample document
-#+UID: http://ofosos.org/epub/sample.org
-#+DATE: 2017-12-02
-#+AUTHOR: Mark Meyer
-#+OPTIONS: tex:dvipng
+#+title:      조판 검증: ox-epub 풀세트 샘플
+#+author:     Junghan Kim
+#+language:   ko
+#+date:       2026-06-01
+#+uid:        urn:uuid:951c252e-5dfb-4340-9740-36047470ddbc
+#+publisher:  junghanacs
+#+license:    CC BY-SA 4.0
+#+epubcover:  images/cover.png
+#+options:    toc:t num:t H:4 tex:dvisvgm html-postamble:nil ^:{}
+#+startup:    num
 
-# The code snippet below requires htmlize!
+#+begin_comment
+이 문서는 ox-epub 의 조판 충실도를 검증하기 위한 풀세트 샘플이다.
+이미지 / 수식(인라인·별행) / 표 / 각주 / 목차 / 한글 / 인용 / 리스트 /
+코드블록 / 강조 / 특수문자(대시) 를 한 파일에 모두 담는다.
+이 한 파일이 손실 없이 EPUB 3.0 으로 변환되고 epubcheck 를 통과하면,
+같은 표준 형식으로 어떤 책이든 내보낼 수 있다는 근거가 된다.
+#+end_comment
 
-* Text
+* 들어가며
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
 
-He felt deeply sorry for getting up. Waddling in his self pity he
-poured coffee into the filter, then paused for the water to heat
-up. His eyes were half closed. He felt nothing, besides the ugly
-morning suffocating his consciousness.
+이 장은 번호가 붙지 않는 머리말이다(=UNNUMBERED= 속성). 한글 본문이
+EPUB 리더에서 어떻게 흐르는지, 자간과 줄바꿈이 자연스러운지 확인한다.
 
-He came to his senses slowly. When he was ready to depart from his
-flat, he packed an umbrella and a jacket, preparing for the
-rain. Technically it was summer, but it had been raining every day for
-the last 5 weeks. The farmers wouldn't be happy about this
-summer. Agriculture was unpredictable and this summer would turn out
-in a way, that nobody would have wanted to predict anyways.
+조판(組版, /typesetting/)은 단순히 글자를 늘어놓는 일이 아니다. 강조에는
+*굵게*, /기울임/, =등폭=, ~코드~, +취소선+, 그리고 _밑줄_ 이 모두 제 역할을
+한다. 위 첨자 H^{2}O, 아래 첨자 x_{i} 도 자주 쓰인다.
 
-He made his way to the Y-intersection, slowly moving in the direction
-of the subway station, that would take him to work on an ordinary
-day. Suffice it to say, that the day he entered the newspapers would
-not be an ordinary day. At least not for him.
+대시 조판도 책에서 중요하다. 하이픈(-), 엔대시(1--3쪽), 엠대시(생각을
+끊는다 --- 이렇게) 는 서로 다른 글자다. 말줄임표(...) 도 마찬가지다.
 
-160 words.
+* 본문 구조와 목차
 
-* A Table
+이 장은 번호가 붙는 일반 장이다. 목차(=toc:t=)에 자동으로 등록되며,
+하위 절·소절까지 =H:4= 깊이로 포함된다.
 
-This is a simple data table:
+** 리스트 조판
 
-#+CAPTION: This is a table
-#+NAME:   fig:some-table
-| foo | bar | baz | quux | quix |
-|-----+-----+-----+------+------|
-|  13 |   7 |   5 |    3 |    1 |
-|   1 |   3 |   5 |    7 |   13 |
+순서 없는 목록:
 
-* An Image
+- 첫째 항목
+- 둘째 항목
+  - 중첩된 항목 (들여쓰기 유지 확인)
+  - 또 다른 중첩
+- 셋째 항목
 
-#+CAPTION: This is the org-mode logo
-#+NAME:   fig:unicorn
-[[./org-mode-unicorn-logo.png]]
+순서 있는 목록:
 
-* Some Code
+1. org 파일 준비
+2. ox-epub 으로 EPUB export
+3. epubcheck 로 검증
 
-# This requires htmlize
+설명 목록(description list):
 
-#+BEGIN_SRC emacs-lisp
-(defun org-xor (a b)
-  "Exclusive or."
-  (if a (not b) b))
-#+END_SRC
+- 조판 :: 글자와 그림을 지면에 배치하는 일
+- EPUB :: 웹페이지를 압축한 전자책 표준 포맷
+- 각주 :: 본문 흐름을 끊지 않고 부연하는 장치[fn:1]
 
-* Some Math
+** 인용과 예시 블록
 
-\begin{equation}
-x=\sqrt{b}
-\end{equation}
+#+begin_quote
+좋은 글쓰기는 본질적으로 다시 쓰기다. --- 로알드 달
+#+end_quote
 
-If $a^2=b$ and \( b=2 \), then the solution must be
-either $$ a=+\sqrt{2} $$ or \[ a=-\sqrt{2} \].
+코드 블록(등폭 조판, 구문 유지):
+
+#+begin_src python
+def org_to_epub(org_path: str) -> str:
+    """org 파일을 EPUB 으로 변환한다."""
+    return run_ox_epub(org_path)
+#+end_src
+
+* 수식 조판
+
+EPUB 에서 수식은 =tex:dvisvgm= 옵션으로 SVG 이미지로 변환된다. 자바스크립트
+없이 모든 리더에서 동일하게 렌더되고, 확대해도 선명하다.
+
+인라인 수식: 질량-에너지 등가는 \( E = mc^2 \) 으로 표현된다. 또한 임의의
+정수 \( n \) 에 대해 \( a_n = a_1 + (n-1)d \) 가 성립한다.
+
+별행 수식(display):
+
+\[ \int_{-\infty}^{\infty} e^{-x^2}\, dx = \sqrt{\pi} \]
+
+연립 방정식도 확인한다:
+
+\[ \begin{aligned} \nabla \cdot \mathbf{E} &= \frac{\rho}{\varepsilon_0} \\ \nabla \times \mathbf{B} &= \mu_0 \mathbf{J} + \mu_0\varepsilon_0 \frac{\partial \mathbf{E}}{\partial t} \end{aligned} \]
+
+* 표 조판
+
+표는 캡션과 번호를 달고 목차 아래 본문에 배치한다. 가로줄만 남기고
+세로줄은 생략하는 것이 출판 관례다.
+
+#+caption: 그리스 문자와 엔티티 변환 확인
+#+name: tab-entity
+| 입력      | 렌더 | 종류     |
+|-----------+------+----------|
+| \alpha    | α    | 그리스   |
+| \le \ge   | ≤ ≥  | 부등호   |
+| \times    | ×    | 연산자   |
+| ---       | —    | 엠대시   |
+
+표 [[tab-entity]] 처럼 상호참조도 동작해야 한다. 위 글자들은 XHTML 의
+명명 엔티티(=&alpha;= 등)로 나오는데, EPUB3 에서는 유니코드 문자로
+변환되어야 파싱 오류가 나지 않는다.
+
+* 그림 조판
+
+그림은 캡션·번호와 함께 배치한다. EPUB 표준은 PNG 같은 개방 포맷을
+권장한다(JPG 미지원 리더 존재).
+
+#+caption: org → EPUB 변환 파이프라인
+#+name: fig-flow
+#+attr_html: :width 600 :alt 변환 파이프라인 도식
+[[file:images/figure-flow.png]]
+
+그림 [[fig-flow]] 은 전체 흐름을 요약한다. 본문에서 그림을 번호로
+참조할 수 있어야 책 조판으로서 완결된다.
+
+* 맺으며
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
+
+이 샘플이 EPUB 으로 충실히 변환되고 epubcheck 를 통과한다면, ox-epub 이
+정의하는 표준 형식으로 어떤 책이든 내보낼 수 있다는 근거가 된다.
+
+[fn:1] 이것이 각주다. EPUB 표준에서 각주는 별도 페이지 또는 팝업으로
+렌더되며, W3C 호환성 이슈가 있는지 epubcheck 로 확인한다.
