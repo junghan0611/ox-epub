@@ -137,7 +137,7 @@
     { font-size: 10px; font-weight: bold; white-space: nowrap; }
   .org-info-js_search-highlight
     { background-color: #ffff00; color: #000000; font-weight: bold; }
-  .org-svg { width: 90%; }
+  .org-svg { max-width: 90%; height: auto; }
 
 "
   "Default style declarations for org epub")
