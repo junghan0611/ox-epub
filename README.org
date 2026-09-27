@@ -138,17 +138,19 @@ quotes, lists, code blocks, emphasis, dashes and entity conversion in one
 file.
 
 #+begin_src sh
-cd sample
-# (re)generate the cover/figure images — needs python + Pillow
-python gen-images.py
-# export via a running daemon …
-emacsclient -s <socket> --eval \
-  "(progn (load \"../ox-epub.el\")
-     (with-current-buffer (find-file-noselect \"sample.org\")
-       (org-epub-export-to-epub)))"
-# … then validate
-nix run nixpkgs#epubcheck -- sample.epub   # => 0 errors / 0 warnings
+./run.sh verify   # export sample/sample.org headless, then EPUBCheck
+                  # => 0 fatals / 0 errors / 0 warnings (the release gate)
+./run.sh images   # regenerate the sample images (python + Pillow via nix)
 #+end_src
+
+=run.sh= exports with the Org from Doom's straight build when it finds one;
+set =ORG_LISP_DIR= to use another.
+
+* Repository
+
+- [[file:CHANGELOG.md][CHANGELOG.md]] — what each CalVer release closed; GitHub release notes are copied from it.
+- [[file:AGENTS.md][AGENTS.md]] — the contract, neighbours (memex-kb, doomemacs-config) and recurring traps.
+- [[file:NEXT.md][NEXT.md]] — the next moves (internal, Korean).
 
 * What changed vs. upstream
 
