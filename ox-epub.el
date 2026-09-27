@@ -54,10 +54,17 @@
     (:epub-rights "License" nil nil t)
     (:epub-style "EPUBSTYLE" nil nil t)
     (:epub-cover "EPUBCOVER" nil nil t)
-    (:html-doctype "HTML_DOCTYPE" nil "xhtml" t))
-    
+    ;; EPUB3 content documents are XHTML5; fancy mode gives <figure>,
+    ;; <figcaption> and <aside> instead of classed <div>s.
+    (:html-doctype "HTML_DOCTYPE" nil "xhtml5" t)
+    (:html-html5-fancy nil "html5-fancy" t))
+
   :translate-alist
   '((template . org-epub-template)
+    (inner-template . org-epub-inner-template)
+    (footnote-reference . org-epub-footnote-reference)
+    (special-block . org-epub-special-block)
+    (paragraph . org-epub-paragraph)
     (link . org-epub-link)
     (latex-environment . org-epub--latex-environment)
     (latex-fragment . org-epub--latex-fragment))
@@ -138,6 +145,21 @@
   .org-info-js_search-highlight
     { background-color: #ffff00; color: #000000; font-weight: bold; }
   .org-svg { max-width: 90%; height: auto; }
+
+  figure { margin: 1em 0; text-align: center; }
+  figure img { max-width: 100%; height: auto; }
+  figcaption { font-size: 90%; margin-top: .4em; }
+  /* Sub-figures of a #+begin_figure group sit two per row; readers
+     without inline-block support simply stack them. */
+  figure figure { display: inline-block; width: 46%;
+                  margin: .5em 1%; vertical-align: top; }
+  .figure-number, .table-number, .listing-number { font-weight: bold; }
+  img.org-align-left   { float: left;  max-width: 50%; margin: 0 1em .5em 0; }
+  img.org-align-right  { float: right; max-width: 50%; margin: 0 0 .5em 1em; }
+  img.org-align-center { display: block; margin: 0 auto; }
+  section.footnotes { margin-top: 2em; border-top: 1px solid #ccc; }
+  aside.footdef { font-size: 90%; margin-bottom: .6em; }
+  a.footnum { font-weight: bold; margin-right: .4em; }
 
 "
   "Default style declarations for org epub")
@@ -376,6 +398,12 @@ as the document identifier; do NOT use on values already produced by
 
 ;; core
 
+(defun org-epub--math-alt (latex)
+  "Return LATEX source on one line, as alt text for its rendered image.
+A formula image named `img-orgXXXX.svg' is all a screen reader or a
+text-to-speech listener would get otherwise."
+  (string-trim (replace-regexp-in-string "[ \t\n]+" " " latex)))
+
 ;;; Latex Environment - stolen from ox-html
 
 (defun org-epub--latex-environment (latex-environment _contents info)
@@ -400,7 +428,11 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 		   (name (concat "img-" ref "." mime)))
 	      (message "Formatting Latex environment: %s" name)
 	      (push (org-epub-manifest-entry ref name 'img (org-epub--mime-type mime) path) org-epub-manifest)
-	      name) attributes info) info))))
+	      name)
+	    (org-combine-plists (list :alt (org-epub--math-alt latex-frag))
+				attributes)
+	    info)
+	   info))))
      (t latex-frag))))
 
 ;;;; Latex Fragment - stolen from ox-html
@@ -421,7 +453,8 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 		 (name (concat "img-" ref "." mime)))
 	    (message "Formatting Latex fragement: %s" name)
 	    (push (org-epub-manifest-entry ref name 'img (org-epub--mime-type mime) path) org-epub-manifest)
-	    (org-html--format-image name nil info)))))
+	    (org-html--format-image
+	     name (list :alt (org-epub--math-alt latex-frag)) info)))))
      (t latex-frag))))
 
 
@@ -437,6 +470,136 @@ See org-html-link for more info."
       (push (org-epub-manifest-entry ref name 'img (org-epub--mime-type mime) path) org-epub-manifest)
       (org-element-put-property link :path name)))
   (org-html-link link desc info))
+
+;;; Figures, captions, footnotes — EPUB3 semantics on top of ox-html
+
+(defun org-epub-paragraph (paragraph contents info)
+  "Transcode PARAGRAPH, leaving a detached paragraph unwrapped.
+org-glossary exports each term by wrapping it in a parentless paragraph
+\(`org-glossary--export-term-str'), which ox-html turns into a <p> inside
+the term's <a> — invalid inline content (epubcheck RSC-005).  A paragraph
+with no parent is never part of the document, so emit its contents only.
+Measured 2026-09-27 with org-glossary 7397aa0; plain ox-html does the same."
+  (if (org-element-property :parent paragraph)
+      (org-html-paragraph paragraph contents info)
+    (org-trim contents)))
+
+(defun org-epub-special-block (special-block contents info)
+  "Transcode SPECIAL-BLOCK like `org-html-special-block', keeping its caption.
+ox-html drops the #+caption of a special block.  A `figure' block is how
+several images form one group (e.g. figures 1-1..1-4 extracted one by one
+by OCR), so its caption is emitted as the group's figcaption, unnumbered —
+the sub-figures carry the numbers."
+  (let ((html (org-html-special-block special-block contents info))
+	(caption (org-export-data (org-export-get-caption special-block) info)))
+    (if (not (and (org-string-nw-p caption)
+		  (string-match "</\\(figure\\|div\\)>\\'" html)))
+	html
+      (concat (substring html 0 (match-beginning 0))
+	      (if (string= (match-string 1 html) "figure")
+		  (format "<figcaption>%s</figcaption>\n" caption)
+		(format "<p class=\"figure-caption\">%s</p>\n" caption))
+	      (match-string 0 html)))))
+
+(defun org-epub-footnote-reference (footnote-reference contents info)
+  "Transcode FOOTNOTE-REFERENCE as an EPUB3 noteref.
+Readers that understand `epub:type=\"noteref\"' show the note as a popup
+instead of jumping to the end of the book."
+  (replace-regexp-in-string
+   "class=\"footref\"" "class=\"footref\" epub:type=\"noteref\""
+   (org-html-footnote-reference footnote-reference contents info) t t))
+
+(defun org-epub--footnote-section (info)
+  "Return the footnote section as EPUB3 `aside' footnotes, or nil.
+Each note is an `aside' whose id is the noteref target, which is what
+popup-capable readers look for; the number links back to the reference."
+  (when-let* ((definitions (org-export-collect-footnote-definitions info)))
+    (format
+     "<section class=\"footnotes\" epub:type=\"footnotes\">\n<h2 class=\"footnotes\">%s</h2>\n%s</section>\n"
+     (org-html--translate "Footnotes" info)
+     (mapconcat
+      (lambda (definition)
+	(pcase-let* ((`(,n ,label ,def) definition)
+		     ;; Numeric labels are renumbered by Org; keep named ones,
+		     ;; exactly as `org-html-footnote-reference' does.
+		     (id (if (and (stringp label)
+				  (not (equal label (number-to-string
+						     (string-to-number label)))))
+			     label
+			   n))
+		     (num (format "<a class=\"footnum\" href=\"#fnr.%s\" role=\"doc-backlink\">%s</a>"
+				  id n))
+		     (inline? (not (org-element-map def org-element-all-elements
+				     #'identity nil t)))
+		     (body (org-trim (org-export-data def info))))
+	  (format "<aside id=\"fn.%s\" class=\"footdef\" epub:type=\"footnote\">\n%s\n</aside>\n"
+		  id
+		  (cond (inline? (format "<p>%s %s</p>" num body))
+			((string-match "\\`<p[^>]*>" body)
+			 (concat (match-string 0 body) num " "
+				 (substring body (match-end 0))))
+			(t (concat num "\n" body))))))
+      definitions ""))))
+
+(defun org-epub-inner-template (contents info)
+  "Return the body: optional table of contents, CONTENTS, then footnotes.
+Same as `org-html-inner-template' except for the EPUB3 footnote section."
+  (concat
+   (when-let* ((depth (plist-get info :with-toc)))
+     (org-html-toc depth info))
+   contents
+   (org-epub--footnote-section info)))
+
+(defvar org-epub-caption-label-regexp
+  "\\(?:그림\\|표\\|사진\\|도표\\|Fig\\(?:ure\\)?\\.?\\|Table\\)[ \t]*[0-9]"
+  "Regexp matching a caption that already carries its own label.
+Book captions come with the book's numbering (\"그림 1-1: ...\"); Org's
+own \"그림 3:\" in front of them would only repeat the label with a
+different number, so it is dropped for such captions.")
+
+(defun org-epub--drop-duplicate-caption-numbers (html)
+  "Remove Org's figure/table number where the caption has its own label."
+  (replace-regexp-in-string
+   (concat "<span class=\"\\(?:figure\\|table\\|listing\\)-number\">[^<]*</span>"
+	   "[ \t\n]*\\(" org-epub-caption-label-regexp "\\)")
+   "\\1" html t))
+
+(defun org-epub--img-align-to-class (html)
+  "Turn the obsolete `align' attribute of every img in HTML into a class.
+HTML5 has no `align' on img (epubcheck RSC-005), but `#+attr_html: :align'
+is the natural Org way to ask for it, so map it to `org-align-*' classes
+that the default style implements."
+  (replace-regexp-in-string
+   "<img\\b[^>]*>"
+   (lambda (tag)
+     ;; `replace-regexp-in-string' reuses the match data after calling us.
+     (save-match-data
+     (if (not (string-match " align=\"\\(left\\|right\\|center\\)\"" tag))
+	 tag
+       (let ((class (concat "org-align-" (match-string 1 tag)))
+	     (tag (replace-match "" t t tag)))
+	 (if (string-match "\\bclass=\"" tag)
+	     (replace-match (concat "class=\"" class " ") t t tag)
+	   (replace-regexp-in-string "\\`<img" (concat "<img class=\"" class "\"")
+				     tag t t))))))
+   html t t))
+
+(defconst org-epub--dictionary-extra
+  '(("Figure %d:" ("ko" :default "그림 %d:"))
+    ("Table %d:" ("ko" :default "표 %d:"))
+    ("Listing %d:" ("ko" :default "코드 %d:"))
+    ("Footnotes" ("ko" :default "각주"))
+    ("Table of Contents" ("ko" :default "차례")))
+  "Translations missing from `org-export-dictionary' (Org 9.8.9 has no \"ko\").")
+
+(defun org-epub--dictionary ()
+  "Return `org-export-dictionary' extended with `org-epub--dictionary-extra'."
+  (let ((dict (copy-tree org-export-dictionary)))
+    (pcase-dolist (`(,key . ,langs) org-epub--dictionary-extra)
+      (if-let* ((entry (assoc key dict)))
+	  (setcdr entry (append langs (cdr entry)))
+	(push (cons key langs) dict)))
+    dict))
 
 (defun org-epub-meta-put (symbols info)
   "Put SYMBOLS taken from INFO into the org-epub metadata cache."
@@ -549,6 +712,7 @@ holding export options."
 	      ;; HTML5/EPUB3 rejects the obsolete presentational table
 	      ;; attributes ox-html emits by default (border/cellspacing/...).
 	      (org-html-table-default-attributes nil)
+	      (org-export-dictionary (org-epub--dictionary))
 	      (org-epub-style-counter 0)
 	      (out-file-type (file-name-extension outfile))
 	      (org-epub-zip-dir (file-name-as-directory
@@ -600,7 +764,9 @@ holding export options."
 	     (erase-buffer)
 	     ;; EPUB3 content docs are parsed as XML under <!DOCTYPE html>; named
 	     ;; HTML entities must become literal characters.
-	     (insert (org-epub--xmlify body))
+	     (insert (org-epub--xmlify
+		      (org-epub--img-align-to-class
+		       (org-epub--drop-duplicate-caption-numbers body))))
 	     (save-buffer 0)
 	     (kill-buffer)
 	     (nconc org-epub-manifest (list (org-epub-manifest-entry "body-html" "body.html" 'html "application/xhtml+xml"))))

@@ -28,7 +28,16 @@ compressed mimetype). This fork makes the exporter emit valid EPUB 3.0
   footnotes (with backlinks), nested lists, quotes, code blocks,
   emphasis, dashes, smart quotes, and named entities (=&alpha;= …) all
   survive the round-trip and validate as XML.
-- *Korean / CJK* friendly.
+- *Book figures* — =<figure>/<figcaption>=, figure groups via
+  =#+begin_figure=, captions that keep the book's own numbering, and
+  =:align left/right/center= mapped to classes (HTML5 has no img =align=).
+- *Popup footnotes* — =epub:type="noteref"= references and
+  =<aside epub:type="footnote">= notes.
+- *Listenable math* — each formula image carries its LaTeX source as
+  =alt=, so screen readers and text-to-speech read the formula.
+- *Korean / CJK* friendly — Korean labels (그림 / 표 / 각주 / 차례),
+  which Org's own export dictionary lacks.
+- Works with [[https://github.com/tecosaur/org-glossary][org-glossary]].
 - Valid, escaped, unique =dc:identifier= (auto-generates a UUID when the
   =#+UID= is missing or a malformed UUID).
 
@@ -102,6 +111,16 @@ controls TOC depth, =toc:t num:t= the table of contents and numbering.
 - Display: =\[ ... \]= (=aligned=, =\int=, =\nabla=, … supported)
 - Set =#+OPTIONS: tex:dvisvgm= to render formulas to SVG.
 
+** Figures
+
+- A captioned standalone image becomes =<figure>= + =<figcaption>=.
+- Several images that form one figure go in a =#+begin_figure= block; the
+  block's =#+caption= becomes the group caption, sub-figures sit two per row.
+- A caption that already starts with its own label (=그림 1-1:=,
+  =Table 2.3=, see =org-epub-caption-label-regexp=) gets no second,
+  Org-generated number — paste book captions as they are.
+- =#+attr_html: :align left|right|center= floats or centres the image.
+
 ** Headless / batch export
 
 #+begin_src sh
@@ -112,9 +131,11 @@ emacs --batch -l ox-epub.el --eval \
 
 * Sample & verification
 
-A full-feature fixture lives in =sample/= — it exercises images, SVG
-math (inline + display), tables, footnotes, TOC, Korean text, quotes,
-lists, code blocks, emphasis, dashes and entity conversion in one file.
+A full-feature fixture lives in =sample/= — it exercises images, figure
+groups, alignment, SVG math (inline + display), tables, footnotes (named,
+inline, multi-paragraph), an org-glossary glossary, TOC, Korean text,
+quotes, lists, code blocks, emphasis, dashes and entity conversion in one
+file.
 
 #+begin_src sh
 cd sample
@@ -144,6 +165,10 @@ EPUB 2.0.1 → EPUB 3.0 lift, folded into the exporter itself:
   aspect-ratio =viewBox=; dimensions read from file header (headless).
 - mimetype stored first with no trailing newline.
 - Obsolete presentational table attributes suppressed.
+- XHTML5 with =html5-fancy=: =<figure>=, =<figcaption>=, =<nav>=,
+  EPUB3 =aside= footnotes; img =align= → =org-align-*= class.
+- Special-block captions kept (ox-html drops them); detached paragraphs
+  (org-glossary terms) no longer wrap a =<p>= inside an =<a>=.
 
 * License
 
