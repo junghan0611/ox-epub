@@ -504,10 +504,16 @@ the sub-figures carry the numbers."
 (defun org-epub-footnote-reference (footnote-reference contents info)
   "Transcode FOOTNOTE-REFERENCE as an EPUB3 noteref.
 Readers that understand `epub:type=\"noteref\"' show the note as a popup
-instead of jumping to the end of the book."
-  (replace-regexp-in-string
-   "class=\"footref\"" "class=\"footref\" epub:type=\"noteref\""
-   (org-html-footnote-reference footnote-reference contents info) t t))
+instead of jumping to the end of the book.  ox-html marks the reference
+`role=\"doc-backlink\"', which belongs to the link back from the note; the
+reference itself is a `doc-noteref'."
+  (let ((html (org-html-footnote-reference footnote-reference contents info)))
+    (setq html (replace-regexp-in-string
+		"class=\"footref\"" "class=\"footref\" epub:type=\"noteref\""
+		html t t))
+    (replace-regexp-in-string
+     "\\(class=\"footref\"[^>]*\\)role=\"doc-backlink\""
+     "\\1role=\"doc-noteref\"" html t)))
 
 (defun org-epub--footnote-section (info)
   "Return the footnote section as EPUB3 `aside' footnotes, or nil.
@@ -578,8 +584,9 @@ that the default style implements."
 	 tag
        (let ((class (concat "org-align-" (match-string 1 tag)))
 	     (tag (replace-match "" t t tag)))
-	 (if (string-match "\\bclass=\"" tag)
-	     (replace-match (concat "class=\"" class " ") t t tag)
+	 ;; A leading space keeps `data-class=' and the like from matching.
+	 (if (string-match " class=\"" tag)
+	     (replace-match (concat " class=\"" class " ") t t tag)
 	   (replace-regexp-in-string "\\`<img" (concat "<img class=\"" class "\"")
 				     tag t t))))))
    html t t))
